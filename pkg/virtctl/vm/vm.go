@@ -42,6 +42,8 @@ const (
 	COMMAND_GUESTOSINFO = "guestosinfo"
 	COMMAND_USERLIST    = "userlist"
 	COMMAND_FSLIST      = "fslist"
+	COMMAND_ADDVOLUME   = "addvolume"
+	COMMAND_RMVOLUME    = "removevolume"
 )
 
 var (
@@ -171,6 +173,36 @@ func NewFSListCommand(clientConfig clientcmd.ClientConfig) *cobra.Command {
 	return cmd
 }
 
+func NewAddVolumeCommand(clientConfig clientcmd.ClientConfig) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "addvolume [vm_name] [volume_name] [disk_name]",
+		Short:   "Add a volume and disk to a running Virtual Machine.",
+		Example: usage(COMMAND_ADDVOLUME),
+		Args:    templates.ExactArgs("addvol", 3),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c := Command{command: COMMAND_ADDVOLUME, clientConfig: clientConfig}
+			return c.Run(cmd, args)
+		},
+	}
+	cmd.SetUsageTemplate(templates.UsageTemplate())
+	return cmd
+}
+
+func NewRemoveVolumeCommand(clientConfig clientcmd.ClientConfig) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "removevolume [vm_name] [disk_name]",
+		Short:   "Removes a volume and disk from a Virtual Machine.",
+		Example: usage(COMMAND_RMVOLUME),
+		Args:    templates.ExactArgs("removevolume", 2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c := Command{command: COMMAND_RMVOLUME, clientConfig: clientConfig}
+			return c.Run(cmd, args)
+		},
+	}
+	cmd.SetUsageTemplate(templates.UsageTemplate())
+	return cmd
+}
+
 type Command struct {
 	clientConfig clientcmd.ClientConfig
 	command      string
@@ -280,6 +312,40 @@ func (o *Command) Run(cmd *cobra.Command, args []string) error {
 		}
 
 		fmt.Printf("%s\n", string(data))
+		return nil
+	case COMMAND_ADDVOLUME:
+		dvName := args[1]
+		diskName := args[2]
+		options := &v1.AddVolumeOptions{
+			Name: diskName,
+			Disk: &v1.Disk{
+				Name: diskName,
+				DiskDevice: v1.DiskDevice{
+					Disk: &v1.DiskTarget{
+						Bus: "scsi",
+					},
+				},
+			},
+			VolumeSource: &v1.HotplugVolumeSource{
+				DataVolume: &v1.DataVolumeSource{
+					Name: dvName,
+				},
+			},
+		}
+		err := virtClient.VirtualMachine(namespace).AddVolume(vmiName, options)
+		if err != nil {
+			return fmt.Errorf("Fail to add volume: %s", err)
+		}
+		return nil
+	case COMMAND_RMVOLUME:
+		volName := args[1]
+		options := &v1.RemoveVolumeOptions{
+			Name: volName,
+		}
+		err := virtClient.VirtualMachine(namespace).RemoveVolume(vmiName, options)
+		if err != nil {
+			return fmt.Errorf("Fail to remove volume volume: %s", err)
+		}
 		return nil
 	}
 
